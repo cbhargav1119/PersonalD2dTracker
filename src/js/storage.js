@@ -4,23 +4,30 @@ class GitHubStorage {
     this.token = localStorage.getItem('wt_gh_token');
     this.owner = localStorage.getItem('wt_gh_owner');
     this.repo = localStorage.getItem('wt_gh_repo');
-    this.filePath = 'data/user-data.json';
+    // Data repo: separate private repo for user data
+    this.dataOwner = localStorage.getItem('wt_gh_data_owner') || this.owner;
+    this.dataRepo = localStorage.getItem('wt_gh_data_repo') || this.repo;
+    this.filePath = 'user-data.json';
     this.sha = null;
     this.saveTimer = null;
     this.syncStatus = 'unknown'; // 'synced' | 'syncing' | 'error'
   }
 
   isConfigured() {
-    return !!(this.token && this.owner && this.repo);
+    return !!(this.token && this.dataOwner && this.dataRepo);
   }
 
-  setConfig(token, owner, repo, userInfo) {
+  setConfig(token, owner, repo, dataOwner, dataRepo, userInfo) {
     this.token = token;
     this.owner = owner;
     this.repo = repo;
+    this.dataOwner = dataOwner || owner;
+    this.dataRepo = dataRepo || repo;
     localStorage.setItem('wt_gh_token', token);
     localStorage.setItem('wt_gh_owner', owner);
     localStorage.setItem('wt_gh_repo', repo);
+    localStorage.setItem('wt_gh_data_owner', this.dataOwner);
+    localStorage.setItem('wt_gh_data_repo', this.dataRepo);
     if (userInfo) {
       localStorage.setItem('wt_gh_user', JSON.stringify(userInfo));
     }
@@ -30,10 +37,14 @@ class GitHubStorage {
     this.token = null;
     this.owner = null;
     this.repo = null;
+    this.dataOwner = null;
+    this.dataRepo = null;
     this.sha = null;
     localStorage.removeItem('wt_gh_token');
     localStorage.removeItem('wt_gh_owner');
     localStorage.removeItem('wt_gh_repo');
+    localStorage.removeItem('wt_gh_data_owner');
+    localStorage.removeItem('wt_gh_data_repo');
     localStorage.removeItem('wt_gh_user');
   }
 
@@ -67,7 +78,7 @@ class GitHubStorage {
     updateSyncUI();
     try {
       const res = await this._api('GET',
-        '/repos/' + this.owner + '/' + this.repo + '/contents/' + this.filePath);
+        '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath);
       if (res.status === 404) {
         // File doesn't exist yet
         this.sha = null;
@@ -119,7 +130,7 @@ class GitHubStorage {
         body.sha = this.sha;
       }
       const res = await this._api('PUT',
-        '/repos/' + this.owner + '/' + this.repo + '/contents/' + this.filePath, body);
+        '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath, body);
 
       if (res.status === 409) {
         // SHA conflict - fetch latest and retry
@@ -149,7 +160,7 @@ class GitHubStorage {
     if (!this.isConfigured()) return;
     try {
       const res = await this._api('GET',
-        '/repos/' + this.owner + '/' + this.repo + '/contents/' + this.filePath);
+        '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath);
       if (res.status === 404) {
         // Create the file
         const body = {
@@ -157,7 +168,7 @@ class GitHubStorage {
           content: btoa('{}')
         };
         const createRes = await this._api('PUT',
-          '/repos/' + this.owner + '/' + this.repo + '/contents/' + this.filePath, body);
+          '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath, body);
         if (createRes.ok) {
           const json = await createRes.json();
           this.sha = json.content.sha;

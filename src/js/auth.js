@@ -46,8 +46,8 @@ function detectRepoFromURL() {
 
 function isLoggedIn() {
   return !!(localStorage.getItem('wt_gh_token') &&
-            localStorage.getItem('wt_gh_owner') &&
-            localStorage.getItem('wt_gh_repo'));
+            (localStorage.getItem('wt_gh_data_owner') || localStorage.getItem('wt_gh_owner')) &&
+            (localStorage.getItem('wt_gh_data_repo') || localStorage.getItem('wt_gh_repo')));
 }
 
 function logout() {

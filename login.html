@@ -23,15 +23,23 @@
     <label class="login-label">Repository Owner</label>
     <input id="owner-input" class="login-input" type="text" placeholder="your-github-username">
 
-    <label class="login-label">Repository Name</label>
+    <label class="login-label">App Repository Name</label>
     <input id="repo-input" class="login-input" type="text" placeholder="PersonalD2dTracker" value="PersonalD2dTracker">
+
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">Private Data Storage</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px;line-height:1.5">Your wellness data is stored in a separate private repo so it's not publicly visible.</div>
+    </div>
+
+    <label class="login-label">Data Repository Name</label>
+    <input id="data-repo-input" class="login-input" type="text" placeholder="PersonalD2dTracker-data" value="PersonalD2dTracker-data">
 
     <button id="login-btn" class="login-btn" onclick="doLogin()">Connect</button>
 
     <div class="login-help">
       Need a token? <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained PAT</a><br>
       Permissions needed: <b>Contents → Read & write</b><br>
-      Select only your wellness tracker repo for security.
+      Select <b>both</b> repos (app + data) when creating your PAT.
     </div>
   </div>
 </div>
@@ -58,12 +66,14 @@ async function doLogin() {
   const token = document.getElementById('pat-input').value.trim();
   const owner = document.getElementById('owner-input').value.trim();
   const repo = document.getElementById('repo-input').value.trim();
+  const dataRepo = document.getElementById('data-repo-input').value.trim();
 
   errEl.style.display = 'none';
 
   if (!token) { showError('Please enter your GitHub PAT.'); return; }
   if (!owner) { showError('Please enter the repository owner (your GitHub username).'); return; }
-  if (!repo) { showError('Please enter the repository name.'); return; }
+  if (!repo) { showError('Please enter the app repository name.'); return; }
+  if (!dataRepo) { showError('Please enter the data repository name.'); return; }
 
   btn.disabled = true;
   btn.textContent = 'Connecting...';
@@ -77,24 +87,24 @@ async function doLogin() {
     return;
   }
 
-  // Validate repo access
-  const hasAccess = await validateRepoAccess(token, owner, repo);
-  if (!hasAccess) {
-    showError('Cannot access ' + owner + '/' + repo + '. Check the repo exists and your PAT has Contents read/write permission.');
+  // Validate data repo access (this is where we read/write)
+  const hasDataAccess = await validateRepoAccess(token, owner, dataRepo);
+  if (!hasDataAccess) {
+    showError('Cannot access data repo ' + owner + '/' + dataRepo + '. Make sure it exists and your PAT has Contents read/write permission for it.');
     btn.disabled = false;
     btn.textContent = 'Connect';
     return;
   }
 
-  // Store config
+  // Store config with separate data repo
   const s = new GitHubStorage();
-  s.setConfig(token, owner, repo, {
+  s.setConfig(token, owner, repo, owner, dataRepo, {
     login: user.login,
     avatar_url: user.avatar_url,
     name: user.name
   });
 
-  // Create data file if needed
+  // Create data file if needed in the data repo
   await s.createFileIfNeeded();
 
   // Redirect to app
