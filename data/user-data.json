@@ -5,7 +5,8 @@
         "med_am_3": true,
         "med_pm_3": true,
         "walk_breakfast_3": true,
-        "walk_lunch_3": true
+        "walk_lunch_3": true,
+        "workout_3": true
       },
       "e": {},
       "s": {}
