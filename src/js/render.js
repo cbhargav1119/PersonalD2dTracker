@@ -297,10 +297,16 @@ MTS.forEach(mt2 => {
       } else {
         o += '<div style="font-size:11px;color:var(--dim);margin-bottom:8px;font-weight:600">Your custom meals (' + myMeals.length + '):</div>';
         const curSlotMeals = getSlotMeals(dk, mt2.k);
+        const curSelIdx = getMealChoice(dk, mt2.k);
+        const curSelName = (curSlotMeals[curSelIdx] || curSlotMeals[0] || {}).t;
         myMeals.forEach((opt, oi) => {
-          const alreadyHere = curSlotMeals.some(m2 => m2.t === opt.t);
-          o += '<div class="meal-option ' + (alreadyHere ? "current" : "") + '" onclick="event.stopPropagation();';
-          if (!alreadyHere) {
+          const slotIdx = curSlotMeals.findIndex(m2 => m2.t === opt.t);
+          const alreadyHere = slotIdx >= 0;
+          const isSelected = opt.t === curSelName;
+          o += '<div class="meal-option ' + (isSelected ? "current" : "") + '" onclick="event.stopPropagation();';
+          if (alreadyHere) {
+            o += "setMealChoice('" + dk + "','" + mt2.k + "'," + slotIdx + ")";
+          } else {
             o += "addFromMyMeals(" + oi + ",'" + dk + "','" + mt2.k + "')";
           }
           o += '">';
@@ -312,8 +318,10 @@ MTS.forEach(mt2 => {
           o += '<div class="meal-macro-row"><span class="meal-macro"><b>' + opt.p + 'g</b> P</span><span class="meal-macro"><b>' + opt.c + 'g</b> C</span><span class="meal-macro"><b>' + opt.f + 'g</b> F</span><span class="meal-macro"><b>' + opt.cal + '</b> cal</span></div>';
           o += '</div>';
           o += '<div class="meal-check">';
-          if (alreadyHere) {
-            o += '<span style="color:var(--green);font-size:10px">added</span>';
+          if (isSelected) {
+            o += '<span style="color:var(--green);font-size:12px;font-weight:700">✓</span>';
+          } else if (alreadyHere) {
+            o += '<span style="color:var(--accent);font-size:10px">select</span>';
           } else {
             o += '<span style="color:var(--accent);font-size:16px">+</span>';
           }
