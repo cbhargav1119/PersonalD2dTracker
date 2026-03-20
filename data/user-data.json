@@ -8,7 +8,11 @@
         "walk_lunch_3": true,
         "workout_3": true,
         "no_sugar_3": true,
-        "water_3": true
+        "water_3": false,
+        "supplement_3": false,
+        "bed_10_3": false,
+        "protein_first_3": true,
+        "walk_dinner_3": false
       },
       "e": {},
       "s": {
