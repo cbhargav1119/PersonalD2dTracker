@@ -10,7 +10,7 @@
         "no_sugar_3": true,
         "water_3": true,
         "supplement_3": false,
-        "bed_10_3": true,
+        "bed_10_3": false,
         "protein_first_3": true,
         "walk_dinner_3": true
       },
