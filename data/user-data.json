@@ -1,1 +1,16 @@
-{}
+{
+  "tracker": {
+    "2026-W12": {
+      "h": {
+        "med_am_3": true,
+        "med_pm_3": true
+      },
+      "e": {},
+      "s": {}
+    }
+  },
+  "meals": {},
+  "customMeals": {},
+  "mealEdits": {},
+  "hiddenMeals": []
+}
