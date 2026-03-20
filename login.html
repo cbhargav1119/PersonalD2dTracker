@@ -13,106 +13,285 @@
   <div class="login-card">
     <div class="login-logo">🏋️</div>
     <div class="login-title">Wellness Tracker</div>
-    <div class="login-sub">Connect your GitHub repo to sync wellness data across all your devices.</div>
 
-    <div id="login-error" class="login-error"></div>
+    <!-- LOGIN MODE (default) -->
+    <div id="login-mode">
+      <div class="login-sub">Sign in to sync your wellness data.</div>
+      <div id="login-error" class="login-error"></div>
 
-    <label class="login-label">GitHub Personal Access Token</label>
-    <input id="pat-input" class="login-input" type="password" placeholder="github_pat_..." autocomplete="off">
+      <label class="login-label">Username</label>
+      <input id="login-user" class="login-input" type="text" placeholder="Your username" autocomplete="username">
 
-    <label class="login-label">Repository Owner</label>
-    <input id="owner-input" class="login-input" type="text" placeholder="your-github-username">
+      <label class="login-label">Password</label>
+      <input id="login-pass" class="login-input" type="password" placeholder="Your password" autocomplete="current-password">
 
-    <label class="login-label">App Repository Name</label>
-    <input id="repo-input" class="login-input" type="text" placeholder="PersonalD2dTracker" value="PersonalD2dTracker">
+      <button id="login-btn" class="login-btn" onclick="doLogin()">Sign In</button>
 
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">Private Data Storage</div>
-      <div style="font-size:11px;color:var(--dim);margin-bottom:10px;line-height:1.5">Your wellness data is stored in a separate private repo so it's not publicly visible.</div>
+      <div class="login-help">
+        First time? <a href="#" onclick="showSetup();return false">Set up your account</a>
+      </div>
     </div>
 
-    <label class="login-label">Data Repository Name</label>
-    <input id="data-repo-input" class="login-input" type="text" placeholder="PersonalD2dTracker-data" value="PersonalD2dTracker-data">
+    <!-- SETUP MODE (first-time) -->
+    <div id="setup-mode" style="display:none">
+      <div class="login-sub">One-time setup. Choose a username & password, then enter your GitHub PAT. You won't need the PAT again after this.</div>
+      <div id="setup-error" class="login-error"></div>
 
-    <button id="login-btn" class="login-btn" onclick="doLogin()">Connect</button>
+      <div style="margin-bottom:14px;padding:12px;background:rgba(20,245,198,.06);border:1px solid rgba(20,245,198,.15);border-radius:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px">Step 1: Choose your login credentials</div>
+        <div style="font-size:11px;color:var(--dim);line-height:1.5">Pick any username and password. You'll use these to sign in from any device.</div>
+      </div>
 
-    <div class="login-help">
-      Need a token? <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained PAT</a><br>
-      Permissions needed: <b>Contents → Read & write</b><br>
-      Select <b>both</b> repos (app + data) when creating your PAT.
+      <label class="login-label">Username</label>
+      <input id="setup-user" class="login-input" type="text" placeholder="Choose a username" autocomplete="off">
+
+      <label class="login-label">Password</label>
+      <input id="setup-pass" class="login-input" type="password" placeholder="Choose a password (min 6 chars)" autocomplete="new-password">
+
+      <label class="login-label">Confirm Password</label>
+      <input id="setup-pass2" class="login-input" type="password" placeholder="Confirm your password" autocomplete="new-password">
+
+      <div style="margin:16px 0 14px;padding:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:4px">Step 2: GitHub PAT (one-time only)</div>
+        <div style="font-size:11px;color:var(--dim);line-height:1.5">Your PAT will be encrypted with your password and stored securely. You won't need to enter it again.</div>
+      </div>
+
+      <label class="login-label">GitHub Personal Access Token</label>
+      <input id="setup-pat" class="login-input" type="password" placeholder="github_pat_..." autocomplete="off">
+
+      <label class="login-label">GitHub Username (repo owner)</label>
+      <input id="setup-owner" class="login-input" type="text" placeholder="your-github-username">
+
+      <label class="login-label">Data Repository Name (private)</label>
+      <input id="setup-data-repo" class="login-input" type="text" placeholder="PersonalD2dTracker-data" value="PersonalD2dTracker-data">
+
+      <button id="setup-btn" class="login-btn" onclick="doSetup()">Complete Setup</button>
+
+      <div class="login-help">
+        Need a PAT? <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one here</a><br>
+        Permissions: <b>Contents → Read & write</b> for both repos.<br><br>
+        Already set up? <a href="#" onclick="showLogin();return false">Sign in instead</a>
+      </div>
     </div>
+
   </div>
 </div>
 
+<script src="src/js/crypto.js"></script>
 <script src="src/js/storage.js"></script>
 <script src="src/js/auth.js"></script>
 <script>
-// Auto-detect repo from URL if on github.io
-(function() {
+let appOwner = '';
+let appRepo = '';
+let credSha = null;
+
+// Initialize
+(async function() {
   if (isLoggedIn()) {
     window.location.href = 'index.html';
     return;
   }
   const detected = detectRepoFromURL();
   if (detected) {
-    document.getElementById('owner-input').value = detected.owner;
-    if (detected.repo) document.getElementById('repo-input').value = detected.repo;
+    appOwner = detected.owner;
+    appRepo = detected.repo;
+    document.getElementById('setup-owner').value = detected.owner;
+  }
+
+  // Check if setup has been done
+  if (appOwner && appRepo) {
+    const result = await fetchCredentials(appOwner, appRepo);
+    if (result) {
+      credSha = result.sha;
+      // Setup done, show login form
+      showLogin();
+    } else {
+      // No credentials yet, show setup
+      showSetup();
+    }
   }
 })();
 
-async function doLogin() {
-  const btn = document.getElementById('login-btn');
-  const errEl = document.getElementById('login-error');
-  const token = document.getElementById('pat-input').value.trim();
-  const owner = document.getElementById('owner-input').value.trim();
-  const repo = document.getElementById('repo-input').value.trim();
-  const dataRepo = document.getElementById('data-repo-input').value.trim();
-
-  errEl.style.display = 'none';
-
-  if (!token) { showError('Please enter your GitHub PAT.'); return; }
-  if (!owner) { showError('Please enter the repository owner (your GitHub username).'); return; }
-  if (!repo) { showError('Please enter the app repository name.'); return; }
-  if (!dataRepo) { showError('Please enter the data repository name.'); return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Connecting...';
-
-  // Validate token
-  const user = await validateToken(token);
-  if (!user) {
-    showError('Invalid token. Please check your PAT and try again.');
-    btn.disabled = false;
-    btn.textContent = 'Connect';
-    return;
-  }
-
-  // Validate data repo access (this is where we read/write)
-  const hasDataAccess = await validateRepoAccess(token, owner, dataRepo);
-  if (!hasDataAccess) {
-    showError('Cannot access data repo ' + owner + '/' + dataRepo + '. Make sure it exists and your PAT has Contents read/write permission for it.');
-    btn.disabled = false;
-    btn.textContent = 'Connect';
-    return;
-  }
-
-  // Store config with separate data repo
-  const s = new GitHubStorage();
-  s.setConfig(token, owner, repo, owner, dataRepo, {
-    login: user.login,
-    avatar_url: user.avatar_url,
-    name: user.name
-  });
-
-  // Create data file if needed in the data repo
-  await s.createFileIfNeeded();
-
-  // Redirect to app
-  window.location.href = 'index.html';
+function showLogin() {
+  document.getElementById('login-mode').style.display = 'block';
+  document.getElementById('setup-mode').style.display = 'none';
 }
 
-function showError(msg) {
+function showSetup() {
+  document.getElementById('login-mode').style.display = 'none';
+  document.getElementById('setup-mode').style.display = 'block';
+}
+
+// === LOGIN ===
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+
+  document.getElementById('login-error').style.display = 'none';
+
+  if (!username) { showLoginError('Enter your username.'); return; }
+  if (!password) { showLoginError('Enter your password.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+
+  try {
+    // Fetch encrypted credentials from public repo
+    if (!appOwner || !appRepo) {
+      showLoginError('Could not detect app repo. Are you on github.io?');
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+
+    const result = await fetchCredentials(appOwner, appRepo);
+    if (!result) {
+      showLoginError('No account found. Please set up first.');
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+
+    const cred = result.credentials;
+
+    // Verify username
+    const usernameHash = await hashUsername(username);
+    if (usernameHash !== cred.usernameHash) {
+      showLoginError('Invalid username or password.');
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+
+    // Decrypt the PAT
+    let decrypted;
+    try {
+      decrypted = await decryptData(password, cred.encrypted);
+    } catch (e) {
+      showLoginError('Invalid username or password.');
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+
+    const config = JSON.parse(decrypted);
+
+    // Validate the PAT still works
+    const user = await validateToken(config.token);
+    if (!user) {
+      showLoginError('Your GitHub token has expired. Please run setup again with a new PAT.');
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+
+    // Store in session (localStorage) and redirect
+    const s = new GitHubStorage();
+    s.setConfig(config.token, config.owner, config.repo, config.dataOwner, config.dataRepo, {
+      login: user.login,
+      avatar_url: user.avatar_url,
+      name: user.name
+    });
+
+    window.location.href = 'index.html';
+  } catch (e) {
+    showLoginError('Login failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+// === SETUP ===
+async function doSetup() {
+  const btn = document.getElementById('setup-btn');
+  const username = document.getElementById('setup-user').value.trim();
+  const password = document.getElementById('setup-pass').value;
+  const password2 = document.getElementById('setup-pass2').value;
+  const pat = document.getElementById('setup-pat').value.trim();
+  const owner = document.getElementById('setup-owner').value.trim();
+  const dataRepo = document.getElementById('setup-data-repo').value.trim();
+
+  document.getElementById('setup-error').style.display = 'none';
+
+  if (!username) { showSetupError('Choose a username.'); return; }
+  if (username.length < 3) { showSetupError('Username must be at least 3 characters.'); return; }
+  if (!password) { showSetupError('Choose a password.'); return; }
+  if (password.length < 6) { showSetupError('Password must be at least 6 characters.'); return; }
+  if (password !== password2) { showSetupError('Passwords do not match.'); return; }
+  if (!pat) { showSetupError('Enter your GitHub PAT.'); return; }
+  if (!owner) { showSetupError('Enter your GitHub username.'); return; }
+  if (!dataRepo) { showSetupError('Enter the data repository name.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Setting up...';
+
+  try {
+    // Validate PAT
+    const user = await validateToken(pat);
+    if (!user) {
+      showSetupError('Invalid GitHub PAT. Please check and try again.');
+      btn.disabled = false; btn.textContent = 'Complete Setup'; return;
+    }
+
+    // Validate data repo access
+    const hasAccess = await validateRepoAccess(pat, owner, dataRepo);
+    if (!hasAccess) {
+      showSetupError('Cannot access ' + owner + '/' + dataRepo + '. Check it exists and your PAT has Contents read/write permission.');
+      btn.disabled = false; btn.textContent = 'Complete Setup'; return;
+    }
+
+    // Also validate app repo access (needed to store credentials)
+    const repoName = appRepo || 'PersonalD2dTracker';
+    const hasAppAccess = await validateRepoAccess(pat, owner, repoName);
+    if (!hasAppAccess) {
+      showSetupError('Cannot access app repo ' + owner + '/' + repoName + '. Your PAT needs Contents access for both repos.');
+      btn.disabled = false; btn.textContent = 'Complete Setup'; return;
+    }
+
+    // Hash username
+    const usernameHash = await hashUsername(username);
+
+    // Encrypt the config (PAT + repo details) with the password
+    const config = {
+      token: pat,
+      owner: owner,
+      repo: repoName,
+      dataOwner: owner,
+      dataRepo: dataRepo
+    };
+    const encrypted = await encryptData(password, JSON.stringify(config));
+
+    // Store encrypted credentials in public app repo
+    const credentialData = {
+      usernameHash: usernameHash,
+      encrypted: encrypted,
+      createdAt: new Date().toISOString(),
+      note: 'Encrypted with AES-256-GCM. PAT is safe without the password.'
+    };
+
+    // Check for existing credentials file
+    const existing = await fetchCredentials(owner, repoName);
+    const stored = await storeCredentials(pat, owner, repoName, credentialData, existing ? existing.sha : null);
+    if (!stored) {
+      showSetupError('Failed to save credentials. Check your PAT has write access to ' + repoName + '.');
+      btn.disabled = false; btn.textContent = 'Complete Setup'; return;
+    }
+
+    // Create data file if needed
+    const s = new GitHubStorage();
+    s.setConfig(pat, owner, repoName, owner, dataRepo, {
+      login: user.login,
+      avatar_url: user.avatar_url,
+      name: user.name
+    });
+    await s.createFileIfNeeded();
+
+    // Done! Redirect
+    window.location.href = 'index.html';
+  } catch (e) {
+    showSetupError('Setup failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Complete Setup';
+  }
+}
+
+function showLoginError(msg) {
   const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function showSetupError(msg) {
+  const el = document.getElementById('setup-error');
   el.textContent = msg;
   el.style.display = 'block';
 }
