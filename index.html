@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wellness">
+<meta name="theme-color" content="#0B1426">
+<title>Wellness Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+<div id="app" style="max-width:480px;margin:0 auto;position:relative">
+  <div class="loading-overlay"><div class="loading-text">Loading wellness data...</div></div>
+</div>
+<script src="src/js/data.js"></script>
+<script src="src/js/storage.js"></script>
+<script src="src/js/auth.js"></script>
+<script src="src/js/tracker.js"></script>
+<script src="src/js/state.js"></script>
+<script src="src/js/meals.js"></script>
+<script src="src/js/render.js"></script>
+<script>
+(async function boot() {
+  if (!isLoggedIn()) {
+    window.location.href = 'login.html';
+    return;
+  }
+  await loadAllData();
+  R();
+})();
+</script>
+</body>
+</html>

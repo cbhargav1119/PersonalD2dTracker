@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0B1426">
+<title>Wellness Tracker - Login</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-logo">🏋️</div>
+    <div class="login-title">Wellness Tracker</div>
+    <div class="login-sub">Connect your GitHub repo to sync wellness data across all your devices.</div>
+
+    <div id="login-error" class="login-error"></div>
+
+    <label class="login-label">GitHub Personal Access Token</label>
+    <input id="pat-input" class="login-input" type="password" placeholder="github_pat_..." autocomplete="off">
+
+    <label class="login-label">Repository Owner</label>
+    <input id="owner-input" class="login-input" type="text" placeholder="your-github-username">
+
+    <label class="login-label">Repository Name</label>
+    <input id="repo-input" class="login-input" type="text" placeholder="PersonalD2dTracker" value="PersonalD2dTracker">
+
+    <button id="login-btn" class="login-btn" onclick="doLogin()">Connect</button>
+
+    <div class="login-help">
+      Need a token? <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained PAT</a><br>
+      Permissions needed: <b>Contents → Read & write</b><br>
+      Select only your wellness tracker repo for security.
+    </div>
+  </div>
+</div>
+
+<script src="src/js/storage.js"></script>
+<script src="src/js/auth.js"></script>
+<script>
+// Auto-detect repo from URL if on github.io
+(function() {
+  if (isLoggedIn()) {
+    window.location.href = 'index.html';
+    return;
+  }
+  const detected = detectRepoFromURL();
+  if (detected) {
+    document.getElementById('owner-input').value = detected.owner;
+    if (detected.repo) document.getElementById('repo-input').value = detected.repo;
+  }
+})();
+
+async function doLogin() {
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  const token = document.getElementById('pat-input').value.trim();
+  const owner = document.getElementById('owner-input').value.trim();
+  const repo = document.getElementById('repo-input').value.trim();
+
+  errEl.style.display = 'none';
+
+  if (!token) { showError('Please enter your GitHub PAT.'); return; }
+  if (!owner) { showError('Please enter the repository owner (your GitHub username).'); return; }
+  if (!repo) { showError('Please enter the repository name.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+
+  // Validate token
+  const user = await validateToken(token);
+  if (!user) {
+    showError('Invalid token. Please check your PAT and try again.');
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+    return;
+  }
+
+  // Validate repo access
+  const hasAccess = await validateRepoAccess(token, owner, repo);
+  if (!hasAccess) {
+    showError('Cannot access ' + owner + '/' + repo + '. Check the repo exists and your PAT has Contents read/write permission.');
+    btn.disabled = false;
+    btn.textContent = 'Connect';
+    return;
+  }
+
+  // Store config
+  const s = new GitHubStorage();
+  s.setConfig(token, owner, repo, {
+    login: user.login,
+    avatar_url: user.avatar_url,
+    name: user.name
+  });
+
+  // Create data file if needed
+  await s.createFileIfNeeded();
+
+  // Redirect to app
+  window.location.href = 'index.html';
+}
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
