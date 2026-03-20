@@ -247,6 +247,35 @@ function addSearchResult(srcDay, srcSlot, srcIdx, tgtDay, tgtSlot) {
   S.addSlot = null;
 }
 
+// Get all unique custom meals across every day+slot (deduplicated by name)
+function getAllCustomMeals() {
+  const seen = new Set();
+  const list = [];
+  Object.keys(customMeals).forEach(ck => {
+    customMeals[ck].forEach(m => {
+      if (seen.has(m.t)) return;
+      seen.add(m.t);
+      list.push(applyEdits({ ...m, custom: true }));
+    });
+  });
+  return list;
+}
+
+// Add a custom meal (by index in _myMealsCache) to a target day+slot
+function addFromMyMeals(idx, tgtDay, tgtSlot) {
+  if (!window._myMealsCache || !window._myMealsCache[idx]) return;
+  const meal = window._myMealsCache[idx];
+  const ck = tgtDay + "_" + tgtSlot;
+  const existing = getSlotMeals(tgtDay, tgtSlot);
+  const dup = existing.findIndex(m => m.t === meal.t);
+  if (dup >= 0) { setMealChoice(tgtDay, tgtSlot, dup); return; }
+  if (!customMeals[ck]) customMeals[ck] = [];
+  customMeals[ck].push({ t: meal.t, d: meal.d, p: meal.p, c: meal.c, f: meal.f, cal: meal.cal, tags: [...(meal.tags || []).filter(t => t !== "picked"), "custom"] });
+  saveCustomDB();
+  const newAll = getSlotMeals(tgtDay, tgtSlot);
+  setMealChoice(tgtDay, tgtSlot, newAll.length - 1);
+}
+
 function getDayMacros(dk) {
   let tp = 0, tc = 0, tf = 0, tcal = 0;
   ["b", "l", "d", "s"].forEach(slot => {

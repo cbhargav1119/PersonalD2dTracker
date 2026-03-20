@@ -215,6 +215,7 @@ MTS.forEach(mt2 => {
     o += '<button class="swap-tab ' + (st === "today" ? "active" : "") + '" onclick="event.stopPropagation();S.swapTab=\'today\';S.browseDay=null;R()">📋 Today</button>';
     o += '<button class="swap-tab ' + (st === "browse" ? "active" : "") + '" onclick="event.stopPropagation();S.swapTab=\'browse\';R()">📅 All Days</button>';
     o += '<button class="swap-tab ' + (st === "add" ? "active" : "") + '" onclick="event.stopPropagation();S.swapTab=\'add\';R()">＋ Add New</button>';
+    o += '<button class="swap-tab ' + (st === "mymeals" ? "active" : "") + '" onclick="event.stopPropagation();S.swapTab=\'mymeals\';R()">⭐ My Meals</button>';
     o += '</div>';
 
     if (st === "today") {
@@ -284,6 +285,41 @@ MTS.forEach(mt2 => {
       o += '</div>';
       o += '<button class="cf-submit" onclick="event.stopPropagation();addCustomMeal(\'' + dk + '\',\'' + mt2.k + '\')">✓ Add Meal</button>';
       o += '</div>';
+    }
+
+    else if (st === "mymeals") {
+      const myMeals = getAllCustomMeals();
+      window._myMealsCache = myMeals;
+      if (myMeals.length === 0) {
+        o += '<div style="text-align:center;padding:24px 10px;color:var(--dim);font-size:12px">';
+        o += '<div style="font-size:28px;margin-bottom:8px">🍽️</div>';
+        o += 'No custom meals yet.<br>Use <b>＋ Add New</b> to create your first meal!</div>';
+      } else {
+        o += '<div style="font-size:11px;color:var(--dim);margin-bottom:8px;font-weight:600">Your custom meals (' + myMeals.length + '):</div>';
+        const curSlotMeals = getSlotMeals(dk, mt2.k);
+        myMeals.forEach((opt, oi) => {
+          const alreadyHere = curSlotMeals.some(m2 => m2.t === opt.t);
+          o += '<div class="meal-option ' + (alreadyHere ? "current" : "") + '" onclick="event.stopPropagation();';
+          if (!alreadyHere) {
+            o += "addFromMyMeals(" + oi + ",'" + dk + "','" + mt2.k + "')";
+          }
+          o += '">';
+          o += '<div class="meal-option-info"><div class="meal-option-name">' + opt.t;
+          o += '<span style="font-size:9px;margin-left:6px;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,.15);color:var(--purple)">CUSTOM</span>';
+          o += '</div>';
+          o += '<div class="meal-option-desc">' + (opt.d || 'Custom meal') + '</div>';
+          o += '<div class="meal-option-tags">' + (opt.tags || []).map(function(t) { var ti2 = TAG_INFO[t]; return ti2 ? '<span class="meal-tag ' + ti2.c + '">' + ti2.l + '</span>' : '' }).join('') + '</div>';
+          o += '<div class="meal-macro-row"><span class="meal-macro"><b>' + opt.p + 'g</b> P</span><span class="meal-macro"><b>' + opt.c + 'g</b> C</span><span class="meal-macro"><b>' + opt.f + 'g</b> F</span><span class="meal-macro"><b>' + opt.cal + '</b> cal</span></div>';
+          o += '</div>';
+          o += '<div class="meal-check">';
+          if (alreadyHere) {
+            o += '<span style="color:var(--green);font-size:10px">added</span>';
+          } else {
+            o += '<span style="color:var(--accent);font-size:16px">+</span>';
+          }
+          o += '</div></div>';
+        });
+      }
     }
 
     o += '</div>';
