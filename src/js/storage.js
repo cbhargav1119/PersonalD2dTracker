@@ -10,7 +10,29 @@ class GitHubStorage {
     this.filePath = 'user-data.json';
     this.sha = null;
     this.saveTimer = null;
+    this.pendingData = null; // Track unsaved data
     this.syncStatus = 'unknown'; // 'synced' | 'syncing' | 'error'
+    this.LOCAL_CACHE_KEY = 'wt_data_cache';
+
+    // Flush pending saves when tab closes
+    window.addEventListener('beforeunload', () => {
+      if (this.pendingData) {
+        // Write to localStorage immediately as safety net
+        this._cacheLocally(this.pendingData);
+        // Try to send via beacon (fire-and-forget)
+        if (this.saveTimer) clearTimeout(this.saveTimer);
+        this._doSave(this.pendingData);
+      }
+    });
+
+    // Also flush on visibility change (mobile: switching apps)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && this.pendingData) {
+        this._cacheLocally(this.pendingData);
+        if (this.saveTimer) clearTimeout(this.saveTimer);
+        this._doSave(this.pendingData);
+      }
+    });
   }
 
   isConfigured() {
@@ -46,11 +68,36 @@ class GitHubStorage {
     localStorage.removeItem('wt_gh_data_owner');
     localStorage.removeItem('wt_gh_data_repo');
     localStorage.removeItem('wt_gh_user');
+    localStorage.removeItem(this.LOCAL_CACHE_KEY);
   }
 
   getUserInfo() {
     try {
       return JSON.parse(localStorage.getItem('wt_gh_user'));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Write-through cache to localStorage
+  _cacheLocally(data) {
+    try {
+      localStorage.setItem(this.LOCAL_CACHE_KEY, JSON.stringify({
+        data: data,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      console.warn('localStorage cache write failed:', e);
+    }
+  }
+
+  // Read from localStorage cache
+  _readLocalCache() {
+    try {
+      const raw = localStorage.getItem(this.LOCAL_CACHE_KEY);
+      if (!raw) return null;
+      const cached = JSON.parse(raw);
+      return cached.data || null;
     } catch (e) {
       return null;
     }
@@ -80,8 +127,14 @@ class GitHubStorage {
       const res = await this._api('GET',
         '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath);
       if (res.status === 404) {
-        // File doesn't exist yet
+        // File doesn't exist yet — check local cache
         this.sha = null;
+        const cached = this._readLocalCache();
+        if (cached) {
+          this.syncStatus = 'synced';
+          updateSyncUI();
+          return cached;
+        }
         this.syncStatus = 'synced';
         updateSyncUI();
         return {};
@@ -91,13 +144,25 @@ class GitHubStorage {
       }
       const json = await res.json();
       this.sha = json.sha;
-      const content = atob(json.content.replace(/\n/g, ''));
+      // Proper Unicode decode: base64 → bytes → UTF-8
+      const content = decodeURIComponent(escape(atob(json.content.replace(/\n/g, ''))));
       const data = JSON.parse(content);
+      // Update local cache with latest from GitHub
+      this._cacheLocally(data);
+      this.pendingData = null; // No unsaved changes
       this.syncStatus = 'synced';
       updateSyncUI();
       return data;
     } catch (e) {
       console.error('Load failed:', e);
+      // Fall back to localStorage cache
+      const cached = this._readLocalCache();
+      if (cached) {
+        console.warn('Using cached local data');
+        this.syncStatus = 'error';
+        updateSyncUI();
+        return cached;
+      }
       this.syncStatus = 'error';
       updateSyncUI();
       return null;
@@ -106,13 +171,18 @@ class GitHubStorage {
 
   async save(data) {
     if (!this.isConfigured()) return;
-    // Debounce: clear pending, wait 2s
+    // Immediately cache locally (never lose data)
+    this._cacheLocally(data);
+    this.pendingData = data;
+    // Debounce GitHub write: clear pending, wait 2s
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => this._doSave(data), 2000);
   }
 
   async saveImmediate(data) {
     if (!this.isConfigured()) return;
+    this._cacheLocally(data);
+    this.pendingData = data;
     if (this.saveTimer) clearTimeout(this.saveTimer);
     await this._doSave(data);
   }
@@ -133,11 +203,13 @@ class GitHubStorage {
         '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath, body);
 
       if (res.status === 409) {
-        // SHA conflict - fetch latest and retry
+        // SHA conflict - fetch latest SHA and retry
         console.warn('SHA conflict, fetching latest...');
-        const latest = await this.load();
-        // Retry with fresh SHA
-        if (latest !== null) {
+        const latestRes = await this._api('GET',
+          '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath);
+        if (latestRes.ok) {
+          const latestJson = await latestRes.json();
+          this.sha = latestJson.sha;
           return this._doSave(data);
         }
       }
@@ -147,12 +219,14 @@ class GitHubStorage {
       }
       const json = await res.json();
       this.sha = json.content.sha;
+      this.pendingData = null; // Successfully saved
       this.syncStatus = 'synced';
       updateSyncUI();
     } catch (e) {
       console.error('Save failed:', e);
       this.syncStatus = 'error';
       updateSyncUI();
+      // Data is safe in localStorage cache — will sync on next save
     }
   }
 
@@ -162,10 +236,12 @@ class GitHubStorage {
       const res = await this._api('GET',
         '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath);
       if (res.status === 404) {
-        // Create the file
+        // Create the file — use local cache if available
+        const cached = this._readLocalCache();
+        const initData = cached || {};
         const body = {
           message: 'Initialize wellness tracker data',
-          content: btoa('{}')
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(initData, null, 2))))
         };
         const createRes = await this._api('PUT',
           '/repos/' + this.dataOwner + '/' + this.dataRepo + '/contents/' + this.filePath, body);

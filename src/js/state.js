@@ -17,7 +17,7 @@ let S = {
   libAddTarget: null, libEdit: null, showHidden: false
 };
 
-// Load all data from GitHub
+// Load all data from GitHub (falls back to localStorage cache)
 async function loadAllData() {
   const data = await storage.load();
   if (data && typeof data === 'object') {
@@ -29,6 +29,14 @@ async function loadAllData() {
   }
   // Re-init day index after load
   S.day = ti();
+
+  // If GitHub load failed but we have local cache, retry sync in background
+  if (storage.syncStatus === 'error' && Object.keys(db).length > 0) {
+    setTimeout(() => {
+      console.log('Retrying GitHub sync...');
+      storage.save(getAllData());
+    }, 5000);
+  }
 }
 
 // Get combined data object for saving
